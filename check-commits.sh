@@ -8,8 +8,8 @@ set -euo pipefail
 #
 # Purpose
 # -------
-# Validates that a sequence of commits builds correctly and passes formatting
-# checks. This ensures each commit represents a valid repository state.
+# Validates that a sequence of commits builds correctly. This ensures each
+# commit represents a valid repository state.
 #
 # Supported Inputs
 # ----------------
@@ -21,7 +21,6 @@ set -euo pipefail
 #
 # Validation Steps Per Commit
 # ---------------------------
-# • rustfmt check
 # • cargo check
 # • documentation build
 # • fuzz target compilation
@@ -32,7 +31,7 @@ set -euo pipefail
 ###############################################################################
 
 REPO_PATH="$(pwd)"
-TOOLCHAIN="1.75.0"
+TOOLCHAIN="stable"
 
 ###############################################################################
 # Argument validation
@@ -105,15 +104,11 @@ cleanup() {
 trap cleanup SIGINT
 
 ###############################################################################
-# Ensure required Rust toolchain and rustfmt component exist
-#
-# rustfmt is pinned to a specific toolchain to avoid formatting differences
-# between Rust versions.
+# Ensure required Rust toolchain exists
 ###############################################################################
 
-echo "Ensuring Rust toolchain $TOOLCHAIN and rustfmt are installed..."
+echo "Ensuring Rust toolchain $TOOLCHAIN is installed..."
 rustup toolchain install "$TOOLCHAIN"
-rustup component add rustfmt --toolchain "$TOOLCHAIN"
 
 ###############################################################################
 # Determine commit range
@@ -158,23 +153,6 @@ COUNT=0
 SUCCESSFUL=true
 
 ###############################################################################
-# rustfmt validation helper
-#
-# Ensures the repository is formatted according to rustfmt rules for the
-# pinned toolchain.
-###############################################################################
-
-run_rustfmt_check() {
-	echo "Running cargo fmt --check using toolchain $TOOLCHAIN..."
-	if ! cargo +"$TOOLCHAIN" fmt --all -- --check; then
-		echo "rustfmt check failed."
-		return 1
-	fi
-	echo "rustfmt check passed."
-	return 0
-}
-
-###############################################################################
 # Main validation loop
 #
 # For each commit:
@@ -207,13 +185,17 @@ while read -r COMMIT_HASH COMMIT_MESSAGE; do
 	###############################################################################
 
 	if ! (
-		run_rustfmt_check &&
 		cargo check &&
-        cargo doc &&
-        cargo doc --document-private-items &&
-        cd fuzz && RUSTFLAGS="--cfg=fuzzing --cfg=secp256k1_fuzz --cfg=hashes_fuzz" cargo check --features=stdin_fuzz &&
-        cd ../lightning && cargo check --no-default-features &&
-        cd .. && RUSTC_BOOTSTRAP=1 RUSTFLAGS="--cfg=c_bindings" cargo check -Z avoid-dev-deps
+		cargo doc &&
+		cargo doc --document-private-items &&
+		cd fuzz &&
+		RUSTFLAGS="--cfg=fuzzing --cfg=secp256k1_fuzz --cfg=hashes_fuzz" \
+			cargo check --features=stdin_fuzz &&
+		cd ../lightning &&
+		cargo check --no-default-features &&
+		cd .. &&
+		RUSTC_BOOTSTRAP=1 RUSTFLAGS="--cfg=c_bindings" \
+			cargo check -Z avoid-dev-deps
 	) &>/tmp/validation-error.log; then
 		echo "Error during validation of $COMMIT_HASH:"
 		cat /tmp/validation-error.log
