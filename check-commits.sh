@@ -95,13 +95,12 @@ cleanup() {
 	echo "Restoring original state..."
 	git checkout "$ORIGINAL_STATE" &>/dev/null || {
 		echo "Failed to restore to $ORIGINAL_STATE"
-		exit 1
+		return 1
 	}
 	echo "Restored to $ORIGINAL_STATE"
-	exit 1
 }
 
-trap cleanup SIGINT
+trap 'cleanup; exit 1' SIGINT
 
 ###############################################################################
 # Ensure required Rust toolchain exists
@@ -152,6 +151,9 @@ echo "Found $COMMIT_COUNT commits to validate."
 COUNT=0
 SUCCESSFUL=true
 
+# CI starts from a clean checkout without ignored lockfiles.
+rm -f "$REPO_PATH/Cargo.lock" "$REPO_PATH/fuzz/Cargo.lock"
+
 ###############################################################################
 # Main validation loop
 #
@@ -189,8 +191,10 @@ while read -r COMMIT_HASH COMMIT_MESSAGE; do
 		cargo doc &&
 		cargo doc --document-private-items &&
 		cd fuzz &&
-		RUSTFLAGS="--cfg=fuzzing --cfg=secp256k1_fuzz --cfg=hashes_fuzz" \
-			cargo check --features=stdin_fuzz &&
+		RUSTFLAGS="--cfg=fuzzing --cfg=secp256k1_fuzz --cfg=hashes_fuzz --cfg=chacha20_poly1305_fuzz" \
+				cargo check --manifest-path fuzz-fake-hashes/Cargo.toml --features=stdin_fuzz &&
+		RUSTFLAGS="--cfg=fuzzing --cfg=secp256k1_fuzz --cfg=chacha20_poly1305_fuzz" \
+				cargo check --manifest-path fuzz-real-hashes/Cargo.toml --features=stdin_fuzz &&
 		cd ../lightning &&
 		cargo check --no-default-features &&
 		cd .. &&
