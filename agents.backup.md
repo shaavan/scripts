@@ -39,10 +39,11 @@ See [README.md](README.md) for the workspace layout and [ARCH.md](ARCH.md) for s
 
 #### Conservative Work Mode
 
-When the user says to "work conservatively":
+Work conservatively by default for every task. The user may explicitly opt out
+of this mode for a task, and explicit instructions in the current request take
+precedence over these defaults.
 
-- Follow explicit instructions in the current request over these defaults, and
-  treat the "top commit" as the current `HEAD` commit.
+- Treat the "top commit" as the current `HEAD` commit.
 - Read the current branch, worktree status, and relevant commit stack before
   making changes.
 - Apply only the part of the solution relevant to the current request. Preserve
@@ -50,6 +51,9 @@ When the user says to "work conservatively":
 - If the resulting worktree changes belong to the top commit, leave them
   uncommitted and provide the complete updated commit message in the response.
   Do not amend the commit.
+- If only a commit message update is needed, provide the proposed message in
+  text. Do not amend, reword, or otherwise update the commit message unless the
+  user explicitly asks for that Git operation.
 - If the resulting changes form a new atomic commit, commit them with a complete,
   verified commit message following the rules below.
 - If changes belong to an earlier non-top commit, leave them uncommitted and
@@ -144,15 +148,24 @@ When the user says to "work conservatively":
 
 #### Commit Messages
 
-- Use a concise imperative title in the form `[tag] <what changed>`. Use tags
-  such as `[feat]`, `[plumb]`, `[test]`, `[feat/test]`, `[refactor]`, `[fixup]`,
-  or `[docs]` according to the commit's role.
-- Make titles describe the user-visible capability or structural purpose, not
-  filenames or implementation mechanics. Use consistent domain terminology and
-  capitalization across the stack.
-- Structure the body as context and motivation, then the change and approach,
-  then its role in the stack or important constraints. Omit a section when it
-  adds no useful information.
+- Use a concise title in the form `[tag] <what is done>`. Use tags such as
+  `[feat]`, `[plumb]`, `[test]`, `[feat/test]`, `[refactor]`, `[fixup]`, or
+  `[docs]` according to the commit's role.
+- Treat every PR revision as work in progress. Write each commit message as a
+  self-contained description of the commit against its base branch, irrespective
+  of earlier versions of the PR. Do not narrate how the commit changed from a
+  previous revision or refer to superseded implementation details.
+- Make titles describe what the commit does, not filenames or incidental
+  implementation mechanics. Use consistent domain terminology and capitalization
+  across the stack.
+- Use the body mainly to explain why the commit exists. Include enough of the
+  approach for the reviewer to understand the shape of the change, but avoid
+  narrating code that is obvious from the diff.
+- Keep commit bodies simple, direct, and readable. Prefer short paragraphs in
+  plain language over dense summaries or broad claims.
+- Maintain the PR narrative across commits. Each body should make clear how this
+  commit fits in the stack and what is intentionally left to a later commit when
+  that matters.
 - Explain why a plumbing or refactor commit exists and what later behavior it
   enables. Explicitly state when logic is intentionally deferred to the next
   commit because that helps reviewers understand an otherwise mechanical diff.
@@ -162,7 +175,7 @@ When the user says to "work conservatively":
   function names.
 - Do not repeat the title, narrate obvious code, or include incidental process
   details such as conflict resolution. Keep the message proportional to the
-  change and readable both alone and in sequence.
+  commit's complexity and readable both alone and in sequence.
 - Wrap commit-message lines at 80 characters and separate paragraphs with blank
   lines. Read the commit after writing it, to ensure it's correctly wrapped.
 - Write commit messages in a temporary file, verify their wrapping, paragraph
@@ -178,10 +191,12 @@ When the user says "write the update message between `pr<N>.<T1>` and
 - Compare the two local tags and identify only reviewer-relevant behavioral or
   structural changes.
 - Return the message as Markdown in a fenced `md` block using this heading:
-  `**Updated** [*.<T1> → .<T2>*](https://github.com/shaavan/rust-lightning/compare/pr<N>.<T1>..pr<N>.<T2>)`.
+  `**Updated** [*.<T1> → .<T2>*](https://git.rust-bitcoin.org/shaavan/rust-lightning/compare/pr<N>.<T1>..pr<N>.<T2>)`.
 - Use only as many short, high-signal bullets as needed. Combine related
   implementation and test changes instead of listing every changed file or
   commit.
+- Prefer two simple bullets when that captures the update. Keep each bullet on
+  one line without manual wrapping unless it becomes hard to read.
 
 #### Work Session Narratives
 
@@ -207,9 +222,11 @@ When the user asks for the "narrative flow of today's work":
 ### Coding Style Rules
 
   - When adding a new function, whether it is part of the main logic or a helper, always include in-code comments and documentation that explain its purpose.
+  - Write documentation for understanding, not merely brevity. Explain the purpose of a constant, helper, or policy; the invariant it preserves; and any important tradeoff behind its chosen behavior. Do not make comments terse when doing so removes context a reviewer needs to understand why the code exists or why specific values were chosen.
   - Prefer `match` over conditionals when it makes the code clearer. If using `match` would make the code more awkward or harder to follow, use conditionals instead.
   - Prefer improving readability through clearer local code structure before extracting new helpers. Use concise, descriptive names and add brief comments where the intent, control flow, or edge case being handled is not immediately obvious.
   - Use comments to explain why the code is written a certain way or what special case it handles. Do not add comments that only restate obvious operations.
+  - For state-machine or validation ordering, write comments from the reviewer's perspective: first state the ordering or invariant being protected, then explain the bug it prevents. Prefer concrete phrases such as "associate the invoice with its pending payment" and "abandon the correct payment" over generic wording like "handle the state correctly."
 
 ### Serialization and Persistence Compatibility
 
