@@ -11,27 +11,6 @@ or action, load and activate the `caveman` skill in `ultra` mode. Ensure
 `caveman::ultra` remains active for every response throughout the thread unless
 the user explicitly disables or changes it.
 
-## Workspace Structure
-
-See [README.md](README.md) for the workspace layout and [ARCH.md](ARCH.md) for some additional remark regarding important parts of LDK's architecture.
-
-## Development Rules
-
-- Always ensure tests pass before committing. To this end, you should run
-  `cargo test` for all affected crates and/or features. Upon completion
-  of the full task you might prompt the user whether they want you to run the
-  full CI tests via `./ci/ci-tests.sh`. Note however that this script will run
-  for a very long time, so please don't timeout when you do.
-- Run `cargo +1.75.0 fmt --all` after every code change
-- Never add new dependencies unless explicitly requested
-- Please always disclose the use of any AI tools in commit messages and PR descriptions using a `Co-Authored-By:` line.
-- When adding new `.rs` files, please ensure to always add the licensing header as found, e.g., in `lightning/src/lib.rs` and other files.
-- When adding comments, do not refer to internal logic in other modules, instead
-  make sure comments make sense in the context they're in without needing other
-  context.
-- Try to keep code DRY - if new code you add is duplicate with other code,
-  deduplicate it.
-
 
 ## Personal Instructions
 
@@ -40,29 +19,174 @@ See [README.md](README.md) for the workspace layout and [ARCH.md](ARCH.md) for s
 #### Conservative Work Mode
 
 Work conservatively by default for every task. The user may explicitly opt out
-of this mode for a task, and explicit instructions in the current request take
+of this mode for a task. Explicit instructions in the current request take
 precedence over these defaults.
+
+##### Before changing anything
 
 - Treat the "top commit" as the current `HEAD` commit.
 - Read the current branch, worktree status, and relevant commit stack before
   making changes.
-- Apply only the part of the solution relevant to the current request. Preserve
-  unrelated worktree changes.
-- If the resulting worktree changes belong to the top commit, leave them
-  uncommitted and provide the complete updated commit message in the response.
-  Do not amend the commit.
+- Apply only the part of the solution relevant to the current request.
+- Preserve unrelated worktree changes.
+
+##### Default output behavior
+
+- Do not create, amend, reword, squash, reset, rebase, cherry-pick, or otherwise
+  rewrite commits unless the user explicitly asks for that Git operation.
+- By default, leave code changes uncommitted and report:
+  - what changed,
+  - where the changes belong in the stack,
+  - what formatter/checks were run,
+  - what tests were not run.
+- If the changes belong to the top commit, leave them uncommitted and provide
+  the complete updated commit message in the response.
 - If only a commit message update is needed, provide the proposed message in
-  text. Do not amend, reword, or otherwise update the commit message unless the
-  user explicitly asks for that Git operation.
-- If the resulting changes form a new atomic commit, commit them with a complete,
-  verified commit message following the rules below.
+  text. Do not amend or reword the commit unless explicitly asked.
 - If changes belong to an earlier non-top commit, leave them uncommitted and
-  explain where they belong. Do not rewrite history unless explicitly asked.
-- Do not combine mixed or unclear worktree changes into a commit. Report the
-  ambiguity instead.
-- Run the required formatter and `git diff --check`, but do not run tests unless
-  explicitly requested. State that tests were not run.
-- Do not amend, rebase, reset, squash, or cherry-pick unless explicitly asked.
+  explain which commit they belong to.
+- If changes are mixed or unclear, leave them uncommitted and report the
+  ambiguity.
+
+##### When committing is allowed
+
+- Commit only when the user explicitly asks to create a commit.
+- If the user asks to create a commit and the changes form one new atomic commit,
+  commit them with a complete, verified commit message following the rules below.
+- If the user asks to create a commit but the changes should be split, explain
+  the split first unless the requested split is already clear.
+- If the user asks for a "feat commit", "test commit", "fixup commit", or similar,
+  that counts as permission to create that specific commit only.
+
+##### Checks
+
+- Run the required formatter and `git diff --check`.
+- Do not run tests unless explicitly requested.
+- State which tests were not run.
+
+## Instructions for creating a plan
+
+When writing a commit-by-commit plan:
+
+1. Resolve and state the exact base commit (excluded) and head commit (included)
+   of the relevant commit range, then read every commit message and full diff
+   before preparing the plan. Do not assign work from commit titles alone.
+
+2. Include every commit in the range exactly once and in ancestry order from the
+   base to the head. Number entries starting from 1.
+
+3. Format every heading exactly as:
+
+   `Commit <number>: <exact original commit title> (<commit hash>)`
+
+   Preserve the title and hash from the existing stack.
+
+4. Place the instructions for a commit directly below its heading. Write them as
+   clear, unambiguous, imperative implementation instructions.
+
+5. For each commit requiring a follow-up, describe only work that belongs in that
+   commit. Include production behavior, validation and failure behavior,
+   compatibility requirements, public or internal documentation, serialization
+   changes, or tests only when that category belongs in the commit under rule 7.
+
+6. Assign a correction to the commit where it logically belongs in the final
+   reviewable history, not merely the commit that last touched the affected
+   line. The corrected stack must remain coherent at every commit.
+
+7. When an issue spans multiple commits, split it explicitly:
+   - place production changes in the relevant feature commit,
+   - place regression coverage in the corresponding test commit,
+   - place documentation changes in the commit that introduced the documented
+     API or behavior.
+
+   Do not duplicate the same implementation work across multiple entries.
+
+8. If an earlier commit introduces infrastructure that is valid at that point,
+   but a later commit uses it incorrectly, assign the correction to the later
+   commit. Do not unnecessarily rewrite the earlier commit.
+
+9. Name affected types, functions, fields, TLV types, or behaviors when known.
+   State what must remain unchanged when that distinction prevents ambiguity.
+
+10. If a commit requires no follow-up, write exactly:
+
+    `NO CHANGES NEEDED`
+
+    Do not add explanation or use another variation of this marker.
+
+11. Keep all original commit titles and commit messages unchanged by default. If
+    a planned follow-up would make the original commit message materially
+    incomplete or inaccurate, explicitly instruct that the commit message needs
+    rewriting and state what the rewritten message must cover. Do not propose a
+    rewrite when the original message remains accurate.
+
+12. Before presenting the plan, verify that:
+    - the stated base and head resolve to the inspected commit range,
+    - every commit in the range is present,
+    - no commit appears more than once,
+    - every identified issue has an owner,
+    - production and test work are assigned separately where appropriate,
+    - no instructions conflict across commits,
+    - every unchanged commit uses the exact required marker.
+
+## Instructions for following a plan
+
+When the user provides a commit and instruction:
+
+1. Confirm the current branch, worktree status, relevant commit stack, and
+   expected position in the plan.
+2. Read the supplied commit and instruction. Verify that the commit title and
+   hash match the instruction and that it is the next commit expected by the
+   plan. If any value does not match, stop and report the mismatch.
+3. Determine whether an equivalent current commit is already present. If so,
+   use it as the target without cherry-picking the supplied commit. Otherwise,
+   cherry-pick the supplied commit and use the resulting commit as the target.
+4. Resolve cherry-pick conflicts conservatively, only as required by the
+   instruction. If a conflict cannot be resolved from the instruction, stop
+   without resolving it speculatively.
+5. If the instruction says `NO CHANGES NEEDED`, leave the target unchanged,
+   create no follow-up commit, and proceed directly to the reporting step.
+6. Preserve the target commit's title and message. If the instruction requires
+   a rewritten commit message, record the complete updated message in a
+   separate `squash!` commit without amending the target commit.
+7. Implement only the requested changes for the target commit.
+8. Run `cargo +1.75.0 fmt --all` and `git diff --check`.
+9. Do not run tests unless the user explicitly requests them.
+10. Overwrite the single repository-local file `.git/commit-msg` for the next
+    commit message. Keep `.git/commit-msg` listed in `.git/info/exclude`.
+11. Create an immediate autosquash-compatible follow-up commit with a properly
+    wrapped message. If the instruction does not require a rewritten commit
+    message, use the exact target commit title with the `fixup!` prefix:
+
+   ```text
+   fixup! <exact title of target commit>
+
+   Instructions:
+
+   <verbatim instruction body, excluding the commit heading>
+   ```
+
+   If the instruction requires a rewritten commit message, use the exact target
+   commit title with the `squash!` prefix:
+
+   ```text
+   squash! <exact title of target commit>
+
+   Updated commit message:
+
+   <complete updated commit message>
+
+   Instructions:
+
+   <verbatim instruction body, excluding the commit heading>
+   ```
+
+12. Leave every `fixup!` and `squash!` commit separate while following the plan.
+    Do not run the final autosquash rebase unless the user explicitly requests
+    it.
+13. Report the target commit and whether it was cherry-picked or already
+    present, the follow-up commit type and hash or that none was required, the
+    worktree status, and any conflict requiring the next instruction.
 
 #### Preferred PR Style
 
@@ -81,6 +205,10 @@ precedence over these defaults.
 - For non-obvious state selection, explicitly document why each state is
   included or skipped. For example, say why a `Used` state needs action and why
   a `Ready` state can be left to an existing refresh or rotation path.
+- For branch-heavy validation logic, prefer short comments that state the
+  protocol invariant before the branch group, such as why a value is absent,
+  externally supplied, derived from creation time, or allowed only as a
+  confirmation of an existing value.
 - For lock-sensitive behavior, avoid doing heavy work while holding locks.
   Prefer marking work as pending and processing it after locks are released,
   with comments explaining why the deferral exists.
@@ -181,7 +309,10 @@ precedence over these defaults.
 - Write commit messages in a temporary file, verify their wrapping, paragraph
   breaks, and trailers, then pass the file to Git with `-F`.
 - Disclose AI assistance in every AI-assisted commit with a short
-  `AI-assisted:` note when useful and the required `Co-Authored-By:` trailer.
+  `AI-assisted:` note and the required `Co-Authored-By:` trailer.
+- If AI was used, add the `AI-assisted:` line immediately before the
+  `Co-Authored-By:` trailer, in the following form:
+  `AI-assisted: <how it was used. For example: Used to plan, write and test the commit>`
 
 #### PR Update Messages
 
