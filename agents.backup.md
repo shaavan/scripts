@@ -382,3 +382,4 @@ When the user asks for the "narrative flow of today's work":
 - If you do not use an existing nearby helper that appears relevant, briefly justify why it is not correct for the case before introducing custom logic.
 - When fixing a regression, avoid minimal local patches that duplicate existing logic unless reusing the helper would be clearly incorrect.
 - For protocol, parsing, serialization, persistence, and validation code, prefer existing canonical helpers and compatibility paths over local reimplementation.
+
